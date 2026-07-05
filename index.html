@@ -38,6 +38,20 @@
         pointer-events: none;
         white-space: pre;
       }
+      #dialogue {
+        display: none;
+        position: fixed;
+        bottom: 64px;
+        left: 50%;
+        transform: translateX(-50%);
+        max-width: 560px;
+        color: #fff;
+        background: rgba(0, 0, 0, 0.55);
+        border-left: 3px solid #ffd700;
+        padding: 10px 16px;
+        font: 15px monospace;
+        pointer-events: none;
+      }
     </style>
   </head>
   <body>
@@ -45,6 +59,7 @@
     <div id="crosshair"></div>
     <div id="hint">Clic para bloquear el mouse — WASD mover, espacio saltar, ESC liberar</div>
     <div id="camaquen-debug"></div>
+    <div id="dialogue"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
