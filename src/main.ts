@@ -6,6 +6,7 @@ import { InteractionSystem } from './core/Interaction';
 import { CamaquenTracker } from './core/Camaquen';
 import { Journey } from './core/Journey';
 import { Dialogue, type DialogueLine } from './core/Dialogue';
+import { ZoneTrigger } from './core/ZoneTrigger';
 
 const PHYSICS_DT = 1 / 60;
 const MAX_STEPS_PER_FRAME = 5;
@@ -17,6 +18,7 @@ async function main(): Promise<void> {
   const hint = document.getElementById('hint')!;
   const camaquenDebug = document.getElementById('camaquen-debug')!;
   const dialogueEl = document.getElementById('dialogue')!;
+  const fadeEl = document.getElementById('fade')!;
 
   // --- Three.js: escena, cámara, renderer ---
   const scene = new THREE.Scene();
@@ -111,6 +113,30 @@ async function main(): Promise<void> {
   esposa.castShadow = true;
   scene.add(esposa);
 
+  // --- Acto I, escena 2: El camino al tambo ---
+  // Un obstáculo bajo entre la cabaña y el tambo (0.6m, por encima del autostep de
+  // 0.4m) para que el tramo enseñe a saltar, sin inventar mecánicas nuevas todavía.
+  addGreyboxSolid([6, 0.6, 1], [0, 0.3, -3], 0xd8c27a);
+
+  // Tambo del Curaca: un recinto más grande e imponente que la cabaña, al sur del
+  // valle, con su propio vano de puerta orientado hacia el camino (norte).
+  const tamboWallColor = 0x6f6656;
+  addGreyboxSolid([9, 2.8, 0.3], [0, 1.4, -19], tamboWallColor); // muro sur (fondo)
+  addGreyboxSolid([0.3, 2.8, 8], [-4.5, 1.4, -15], tamboWallColor); // muro oeste
+  addGreyboxSolid([0.3, 2.8, 8], [4.5, 1.4, -15], tamboWallColor); // muro este
+  addGreyboxSolid([3.6, 2.8, 0.3], [-2.6, 1.4, -11], tamboWallColor); // muro norte, segmento izquierdo
+  addGreyboxSolid([3.6, 2.8, 0.3], [2.6, 1.4, -11], tamboWallColor); // muro norte, segmento derecho (vano de 1.6m al centro)
+  addGreyboxSolid([9, 0.3, 8], [0, 2.95, -15], 0x4a4438); // techo
+
+  // Curaca: placeholder geométrico, de pie al fondo del tambo.
+  const curaca = new THREE.Mesh(
+    new THREE.CapsuleGeometry(0.32, 1.15, 4, 8),
+    new THREE.MeshStandardMaterial({ color: 0x556677 }),
+  );
+  curaca.position.set(0, 0.97, -18);
+  curaca.castShadow = true;
+  scene.add(curaca);
+
   // --- Jugador ---
   const player = new Player(world, { x: -1, y: 2, z: 8.5 });
   camera.position.set(-1, EYE_OFFSET, 8.5);
@@ -160,8 +186,20 @@ async function main(): Promise<void> {
     renderDialogue();
   }
 
+  // --- Fin del prólogo (ambas rutas convergen en la fosa común; Acto II queda pendiente) ---
+  let endingTriggered = false;
+
+  function terminarPrologo(mensaje: string): void {
+    endingTriggered = true;
+    fadeEl.textContent = `${mensaje}\n\n— Fin del prólogo (por ahora) —`;
+    fadeEl.style.opacity = '1';
+  }
+
   // --- Estado del prólogo ---
   let tieneQuipu = false;
+  let mensajeEntregado = false;
+  let rutaSospecha: ZoneTrigger | null = null;
+  let rutaIndiferencia: ZoneTrigger | null = null;
 
   // --- Sistema de interacción ---
   const interactions = new InteractionSystem();
@@ -195,6 +233,53 @@ async function main(): Promise<void> {
       }
     },
   });
+  interactions.register({
+    id: 'curaca',
+    position: { x: curaca.position.x, y: curaca.position.y, z: curaca.position.z },
+    range: 2.2,
+    onInteract: () => {
+      if (!tieneQuipu) {
+        startDialogue([{ hablante: 'Curaca', texto: '¿Traes noticias, mensajero? Habla rápido.' }]);
+        return;
+      }
+      if (!mensajeEntregado) {
+        startDialogue(
+          [
+            { hablante: 'Curaca', texto: 'Un quipu... al fin. Déjame ver qué dice el norte.' },
+            { hablante: 'Curaca', texto: 'Esto podría detener la sangría, si los príncipes escuchan.' },
+            { hablante: 'Curaca', texto: 'Vuelve a tu casa, mensajero. Ya hiciste tu parte.' },
+          ],
+          () => {
+            mensajeEntregado = true;
+            console.info('[acto1] Mensaje entregado al Curaca.');
+            // A partir de aquí el jugador decide con los pies: investigar los
+            // murmullos detrás del tambo (Ruta A) o volver derecho a casa (Ruta B).
+            rutaSospecha = new ZoneTrigger({ x: 0, y: 1, z: -22 }, 2.5, () => {
+              startDialogue(
+                [
+                  { hablante: 'Chasqui', texto: 'Hay algo mal en el silencio detrás del tambo...' },
+                  { hablante: 'Chasqui', texto: '¡El Curaca! ¡Le tendieron una trampa a mi gente!' },
+                  { hablante: '???', texto: 'Un mensajero, aquí, escuchando todo lo que no debía...' },
+                ],
+                () => terminarPrologo('Te superan en número. Todo se vuelve oscuro.'),
+              );
+            });
+            rutaIndiferencia = new ZoneTrigger({ x: 0, y: 1, z: 2 }, 2.5, () => {
+              startDialogue(
+                [
+                  { hablante: 'Chasqui', texto: 'No es asunto mío. Mi hogar espera.' },
+                  { hablante: 'Chasqui', texto: 'El cielo se oscurece de golpe. Algo ruge en la montaña.' },
+                ],
+                () => terminarPrologo('El huayco te alcanza antes de que puedas reaccionar.'),
+              );
+            });
+          },
+        );
+      } else {
+        startDialogue([{ hablante: 'Curaca', texto: 'Ve con cuidado. Ya no hay nada más que decir aquí.' }]);
+      }
+    },
+  });
   const lookDir = new THREE.Vector3();
 
   // --- Input ---
@@ -218,8 +303,8 @@ async function main(): Promise<void> {
   window.addEventListener('keyup', (e) => keys.delete(e.code));
 
   function readInput(): MoveInput {
-    if (activeDialogue && !activeDialogue.isFinished) {
-      return { moveX: 0, moveZ: 0, jump: false }; // el Chasqui no camina mientras conversa
+    if (endingTriggered || (activeDialogue && !activeDialogue.isFinished)) {
+      return { moveX: 0, moveZ: 0, jump: false }; // el Chasqui no camina mientras conversa ni tras el desenlace
     }
     const moveZ = (keys.has('KeyW') ? 1 : 0) - (keys.has('KeyS') ? 1 : 0);
     const moveX = (keys.has('KeyD') ? 1 : 0) - (keys.has('KeyA') ? 1 : 0);
@@ -254,6 +339,11 @@ async function main(): Promise<void> {
     const pos = player.position;
     camera.position.set(pos.x, pos.y + EYE_OFFSET, pos.z);
 
+    if (!endingTriggered) {
+      rutaSospecha?.update(pos);
+      rutaIndiferencia?.update(pos);
+    }
+
     renderer.render(scene, camera);
   });
 
@@ -268,6 +358,11 @@ async function main(): Promise<void> {
     camaquen,
     journey,
     getTieneQuipu: () => tieneQuipu,
+    getMensajeEntregado: () => mensajeEntregado,
+    getEndingTriggered: () => endingTriggered,
+    // Solo para depuración: el loop de render (rAF) no corre si document.hidden es
+    // true, así que exponemos las zonas para poder invocar su update() a mano.
+    getBranchZones: () => ({ rutaSospecha, rutaIndiferencia }),
   };
 }
 

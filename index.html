@@ -52,6 +52,22 @@
         font: 15px monospace;
         pointer-events: none;
       }
+      #fade {
+        position: fixed;
+        inset: 0;
+        background: #000;
+        opacity: 0;
+        transition: opacity 2.5s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #ffd700;
+        font: 20px monospace;
+        text-align: center;
+        white-space: pre-line;
+        padding: 40px;
+        pointer-events: none;
+      }
     </style>
   </head>
   <body>
@@ -60,6 +76,7 @@
     <div id="hint">Clic para bloquear el mouse — WASD mover, espacio saltar, ESC liberar</div>
     <div id="camaquen-debug"></div>
     <div id="dialogue"></div>
+    <div id="fade"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
