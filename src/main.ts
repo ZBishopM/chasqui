@@ -3,6 +3,7 @@ import { PointerLockControls } from 'three/examples/jsm/controls/PointerLockCont
 import RAPIER from '@dimforge/rapier3d-compat';
 import { Player, EYE_OFFSET, type MoveInput } from './entities/Player';
 import { InteractionSystem } from './core/Interaction';
+import { CamaquenTracker } from './core/Camaquen';
 
 const PHYSICS_DT = 1 / 60;
 const MAX_STEPS_PER_FRAME = 5;
@@ -12,6 +13,7 @@ async function main(): Promise<void> {
 
   const app = document.getElementById('app')!;
   const hint = document.getElementById('hint')!;
+  const camaquenDebug = document.getElementById('camaquen-debug')!;
 
   // --- Three.js: escena, cámara, renderer ---
   const scene = new THREE.Scene();
@@ -94,13 +96,28 @@ async function main(): Promise<void> {
   controls.addEventListener('lock', () => (hint.style.opacity = '0'));
   controls.addEventListener('unlock', () => (hint.style.opacity = '0.7'));
 
+  // --- Camaquen: acumulación de sangre/oro que alimenta al Champí (GDD §6, §11) ---
+  const camaquen = new CamaquenTracker();
+
+  function renderCamaquenDebug(): void {
+    camaquenDebug.textContent =
+      `Camaquen — poder: ${camaquen.poder.toFixed(1)}  ` +
+      `visibilidad: ${camaquen.visibilidad.toFixed(2)}  ` +
+      `marca: ${camaquen.marca}`;
+  }
+  renderCamaquenDebug();
+
   // --- Sistema de interacción: base compartida por el tutorial y, más adelante, por el targeting de los poderes ---
   const interactions = new InteractionSystem();
   interactions.register({
     id: 'demo-quipu',
     position: { x: demoProp.position.x, y: demoProp.position.y, z: demoProp.position.z },
     range: 3,
-    onInteract: () => console.info('[interact] quipu de prueba tocado'),
+    onInteract: () => {
+      camaquen.addOro(5);
+      renderCamaquenDebug();
+      console.info('[interact] oro sagrado absorbido —', camaquenDebug.textContent);
+    },
   });
   const lookDir = new THREE.Vector3();
 
@@ -159,6 +176,7 @@ async function main(): Promise<void> {
     controls,
     world,
     interactions,
+    camaquen,
   };
 }
 
