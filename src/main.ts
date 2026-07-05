@@ -4,6 +4,7 @@ import RAPIER from '@dimforge/rapier3d-compat';
 import { Player, EYE_OFFSET, type MoveInput } from './entities/Player';
 import { InteractionSystem } from './core/Interaction';
 import { CamaquenTracker } from './core/Camaquen';
+import { Journey } from './core/Journey';
 
 const PHYSICS_DT = 1 / 60;
 const MAX_STEPS_PER_FRAME = 5;
@@ -99,11 +100,17 @@ async function main(): Promise<void> {
   // --- Camaquen: acumulación de sangre/oro que alimenta al Champí (GDD §6, §11) ---
   const camaquen = new CamaquenTracker();
 
+  // --- Journey: progreso por el Camino del Mensajero (GDD §13) ---
+  const journey = new Journey();
+
   function renderCamaquenDebug(): void {
     camaquenDebug.textContent =
+      `${journey.actual.nombre} (${journey.actual.lugarHistorico}) — fase: ${journey.actual.faseDuelo}\n` +
       `Camaquen — poder: ${camaquen.poder.toFixed(1)}  ` +
       `visibilidad: ${camaquen.visibilidad.toFixed(2)}  ` +
-      `marca: ${camaquen.marca}`;
+      `marca: ${camaquen.marca}\n` +
+      `poderes: ${journey.poderesDesbloqueados.join(', ') || '(ninguno)'}\n` +
+      `[N] siguiente departamento (debug)`;
   }
   renderCamaquenDebug();
 
@@ -127,6 +134,11 @@ async function main(): Promise<void> {
     keys.add(e.code);
     if (e.code === 'KeyE') {
       interactions.interact(camera.position, camera.getWorldDirection(lookDir));
+    }
+    if (e.code === 'KeyN') {
+      // Atajo de debug: aún no hay un trigger real de fin de nivel/departamento.
+      journey.avanzar();
+      renderCamaquenDebug();
     }
   });
   window.addEventListener('keyup', (e) => keys.delete(e.code));
@@ -177,6 +189,7 @@ async function main(): Promise<void> {
     world,
     interactions,
     camaquen,
+    journey,
   };
 }
 
