@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { PointerLockControls } from 'three/examples/jsm/controls/PointerLockControls.js';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { Player, EYE_OFFSET, type MoveInput } from './entities/Player';
+import { InteractionSystem } from './core/Interaction';
 
 const PHYSICS_DT = 1 / 60;
 const MAX_STEPS_PER_FRAME = 5;
@@ -76,6 +77,14 @@ async function main(): Promise<void> {
   addGreyboxSolid([2, 0.3, 2], [3, 0.15, 3], 0xd8c27a); // escalón bajo (autostep)
   addGreyboxSolid([3, 1.2, 3], [-4, 0.6, -4], 0xd8c27a); // plataforma alta (requiere salto)
 
+  // Objeto de prueba para el sistema de interacción (placeholder del quipu del prólogo).
+  const demoProp = new THREE.Mesh(
+    new THREE.SphereGeometry(0.25, 16, 16),
+    new THREE.MeshStandardMaterial({ color: 0xffd700, emissive: 0x554400 }),
+  );
+  demoProp.position.set(0, 1, 2);
+  scene.add(demoProp);
+
   // --- Jugador ---
   const player = new Player(world, { x: 0, y: 2, z: 5 });
   camera.position.set(0, EYE_OFFSET, 5);
@@ -85,9 +94,24 @@ async function main(): Promise<void> {
   controls.addEventListener('lock', () => (hint.style.opacity = '0'));
   controls.addEventListener('unlock', () => (hint.style.opacity = '0.7'));
 
+  // --- Sistema de interacción: base compartida por el tutorial y, más adelante, por el targeting de los poderes ---
+  const interactions = new InteractionSystem();
+  interactions.register({
+    id: 'demo-quipu',
+    position: { x: demoProp.position.x, y: demoProp.position.y, z: demoProp.position.z },
+    range: 3,
+    onInteract: () => console.info('[interact] quipu de prueba tocado'),
+  });
+  const lookDir = new THREE.Vector3();
+
   // --- Input ---
   const keys = new Set<string>();
-  window.addEventListener('keydown', (e) => keys.add(e.code));
+  window.addEventListener('keydown', (e) => {
+    keys.add(e.code);
+    if (e.code === 'KeyE') {
+      interactions.interact(camera.position, camera.getWorldDirection(lookDir));
+    }
+  });
   window.addEventListener('keyup', (e) => keys.delete(e.code));
 
   function readInput(): MoveInput {
@@ -96,24 +120,11 @@ async function main(): Promise<void> {
     return { moveX, moveZ, jump: keys.has('Space') };
   }
 
-  // --- Raycast de interacción: base compartida por casi todos los poderes del GDD ---
-  const raycaster = new THREE.Raycaster();
-  const lookDir = new THREE.Vector3();
-  let hoveredType: string | null = null;
-
-  function updateInteractionRaycast(): void {
-    raycaster.set(camera.position, camera.getWorldDirection(lookDir));
-    const hits = raycaster.intersectObjects(scene.children, false);
-    const type = hits[0]?.object.type ?? null;
-    if (type !== hoveredType) {
-      hoveredType = type;
-      console.debug('[interact] mirando:', type ?? 'nada');
-    }
-  }
-
   // --- Loop principal: física a paso fijo, render a la tasa del monitor ---
+  // Nota: deliberadamente NO se usa timer.connect(document). Ese modo pone el delta
+  // en 0 mientras document.hidden es true, redundante con el clamp manual de abajo
+  // (frameDelta acotado a 0.1s), que ya evita el salto grande al recuperar foco.
   const timer = new THREE.Timer();
-  timer.connect(document);
   const euler = new THREE.Euler(0, 0, 0, 'YXZ');
   let accumulator = 0;
 
@@ -137,12 +148,18 @@ async function main(): Promise<void> {
     const pos = player.position;
     camera.position.set(pos.x, pos.y + EYE_OFFSET, pos.z);
 
-    updateInteractionRaycast();
     renderer.render(scene, camera);
   });
 
   // Gancho de depuración: solo para inspeccionar estado en vivo durante el desarrollo.
-  (window as unknown as { __debug: unknown }).__debug = { scene, camera, player, controls, world };
+  (window as unknown as { __debug: unknown }).__debug = {
+    scene,
+    camera,
+    player,
+    controls,
+    world,
+    interactions,
+  };
 }
 
 main().catch((err) => {
